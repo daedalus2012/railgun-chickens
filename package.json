@@ -1,13 +1,22 @@
 {
-  "name": "railgun-hill",
+  "name": "railgun-chickens",
   "version": "1.0.0",
-  "description": "",
+  "description": "3D railgun hill defense game — stop the chickens!",
+  "homepage": "https://daedalus2012.github.io/railgun-chickens/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/daedalus2012/railgun-chickens.git"
+  },
+  "bugs": {
+    "url": "https://github.com/daedalus2012/railgun-chickens/issues"
+  },
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "preview:gh": "vite preview --base /railgun-chickens/"
   },
   "keywords": [],
   "author": "",
