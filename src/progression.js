@@ -7,40 +7,8 @@ export const ACTS = [
   { name: 'ACT IV — APOCALYPSE',  from: 16, to: 20 },
 ];
 
-const THREAT_LABELS = {
-  normal: 'Standard flock',
-  fast: 'Fast runners',
-  tank: 'Heavy armor',
-  explosive: 'Volatile units',
-  armored: 'Plated assault',
-  swarm: 'Swarm pack',
-  giant: 'Giant boss',
-};
-
 export function getAct(wave) {
   return ACTS.find((a) => wave >= a.from && wave <= a.to) || ACTS[ACTS.length - 1];
-}
-
-export function waveIntel(wave) {
-  const comp = waveComposition(wave);
-  const counts = {};
-  for (const type of comp) counts[type] = (counts[type] || 0) + 1;
-  const threats = Object.entries(counts)
-    .sort((a, b) => b[1] - a[1])
-    .map(([type, n]) => `${n}× ${THREAT_LABELS[type] || type}`);
-  const bosses = counts.giant || 0;
-  const act = getAct(wave);
-  const difficulty = Math.min(5, Math.ceil(wave / 4));
-  return {
-    wave,
-    act: act.name,
-    total: comp.length,
-    threats,
-    bosses,
-    difficulty,
-    isBossWave: bosses > 0,
-    isFinal: wave >= FINAL_WAVE,
-  };
 }
 
 export function milestoneBonus(wave) {

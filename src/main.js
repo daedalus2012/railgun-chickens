@@ -6,7 +6,7 @@ import { Effects } from './effects.js';
 import { GameAudio } from './audio.js';
 import { FINAL_WAVE, saveGame, loadGame, clearSave, saveGameManual, loadGameManual, getManualSaveInfo } from './save.js';
 import {
-  waveComposition, waveScaling, waveIntel, getAct,
+  waveComposition, waveScaling, getAct,
   milestoneBonus, waveClearReward,
 } from './progression.js';
 
@@ -54,7 +54,7 @@ const UPGRADES = {
 };
 
 const state = {
-  phase: 'menu', // menu | playing | shop | paused | gameover | victory
+  phase: 'menu', // menu | playing | awaiting-lock | shop | paused | gameover | victory
   wave: 0,
   score: 0,
   money: 0,
@@ -165,26 +165,24 @@ document.addEventListener('mousemove', (e) => {
 });
 document.addEventListener('mousedown', (e) => {
   if (e.button !== 0) return;
-  mouseDown = true;
-  // Click battlefield to acquire pointer lock after start / resume
-  if (resumePending && state.phase === 'playing' && !isLocked()) {
+  if (state.phase === 'awaiting-lock' && !isLocked()) {
     requestPlayLock();
+    return;
   }
+  if (state.phase === 'playing' && isLocked()) mouseDown = true;
 });
 canvas.addEventListener('click', () => {
-  if (resumePending && state.phase === 'playing' && !isLocked()) {
-    requestPlayLock();
-  }
+  if (state.phase === 'awaiting-lock' && !isLocked()) requestPlayLock();
 });
 document.addEventListener('mouseup', (e) => { if (e.button === 0) mouseDown = false; });
 document.addEventListener('keydown', (e) => {
-  if (e.code === 'KeyR' && state.phase === 'playing') startReload();
+  if (e.code === 'KeyR' && state.phase === 'playing' && isLocked()) startReload();
   if (e.code === 'F5') {
     e.preventDefault();
-    if (state.phase === 'playing' || state.phase === 'paused' || state.phase === 'shop') manualSave();
+    if (state.phase === 'playing' || state.phase === 'awaiting-lock' || state.phase === 'paused' || state.phase === 'shop') manualSave();
   }
   if (e.code === 'Escape') {
-    if (state.phase === 'playing') pauseGame();
+    if (state.phase === 'playing' || state.phase === 'awaiting-lock') pauseGame();
     else if (state.phase === 'paused') resumeFromPause();
   }
 });
@@ -208,7 +206,7 @@ function persistDebounced() {
 document.addEventListener('visibilitychange', () => {
   tabHidden = document.hidden;
   if (document.hidden) {
-    if (state.phase === 'playing') pauseGame(true);
+    if (state.phase === 'playing' || state.phase === 'awaiting-lock') pauseGame(true);
     else persistNow();
   }
 });
@@ -485,7 +483,7 @@ const game = {
 // ---------------- Wave flow ----------------
 function startWave(n) {
   state.wave = n;
-  state.phase = 'playing';
+  state.phase = 'awaiting-lock';
   state.waveScale = waveScaling(n);
   state.spawnQueue = waveComposition(n);
   state.spawnInterval = state.waveScale.interval;
@@ -496,14 +494,15 @@ function startWave(n) {
   syncMagSize();
   pausingLock = false;
   resumePending = true;
+  mouseDown = false;
   engageEl.classList.remove('hidden');
   audio.setIntensity(Math.min(1, n / FINAL_WAVE));
   audio.waveStart();
   updateHUD();
   updateAmmoUI();
   document.getElementById('reload-text').classList.remove('show');
-  const intel = waveIntel(n);
-  const label = n >= FINAL_WAVE ? `FINAL WAVE ${n}` : intel.isBossWave ? `WAVE ${n} — BOSS ASSAULT` : `WAVE ${n}`;
+  const isBoss = state.spawnQueue.includes('giant');
+  const label = n >= FINAL_WAVE ? `FINAL WAVE ${n}` : isBoss ? `WAVE ${n} — BOSS ASSAULT` : `WAVE ${n}`;
   showBanner(label, 1800, getAct(n).name);
   // Don't request lock here — wait for a click on the canvas (avoids instant pause from button click)
   persistNow();
@@ -568,18 +567,6 @@ function openShop() {
 
 function renderShop() {
   document.getElementById('shop-money').textContent = state.money;
-  const nextWave = state.wave + 1;
-  const intel = waveIntel(nextWave);
-  const intelEl = document.getElementById('wave-intel');
-  if (intelEl) {
-    intelEl.innerHTML = `
-      <div class="intel-header">
-        <span class="intel-act">${intel.act}</span>
-        <span class="intel-diff">THREAT ${'█'.repeat(intel.difficulty)}${'░'.repeat(5 - intel.difficulty)}</span>
-      </div>
-      <div class="intel-title">INCOMING — WAVE ${nextWave} · ${intel.total} hostiles${intel.isBossWave ? ' · BOSS' : ''}</div>
-      <ul class="intel-list">${intel.threats.map((t) => `<li>${t}</li>`).join('')}</ul>`;
-  }
 
   upgradeGrid.innerHTML = '';
   const cats = { offense: 'OFFENSE', defense: 'DEFENSE', utility: 'UTILITY' };
@@ -659,8 +646,9 @@ function resumeFromPause() {
   if (state.phase !== 'paused') return;
   pauseEl.classList.add('hidden');
   audio.uiClick();
-  state.phase = 'playing';
+  state.phase = 'awaiting-lock';
   resumePending = true;
+  mouseDown = false;
   pausingLock = false;
   engageEl.classList.remove('hidden');
 }
@@ -767,8 +755,10 @@ function restoreGame(data) {
     document.getElementById('pause-score').textContent = state.score;
     document.getElementById('pause-money').textContent = state.money;
     document.getElementById('pause-health').textContent = `${Math.round(state.health)}%`;
-  } else if (state.phase === 'playing') {
+  } else if (state.phase === 'playing' || state.phase === 'awaiting-lock') {
+    state.phase = 'awaiting-lock';
     resumePending = true;
+    mouseDown = false;
     engageEl.classList.remove('hidden');
   }
   audio.setIntensity(Math.min(1, state.wave / FINAL_WAVE));
@@ -841,7 +831,7 @@ function tick() {
         document.getElementById('reload-text').classList.remove('show');
       }
     }
-    if (mouseDown) tryFire();
+    if (mouseDown && isLocked()) tryFire();
 
     waveTick(dt);
     chickens.update(dt, game);

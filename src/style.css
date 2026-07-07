@@ -370,32 +370,6 @@ body:not(.pointer-locked) #crosshair { opacity: 0; }
 #upgrade-grid::-webkit-scrollbar { width: 5px; }
 #upgrade-grid::-webkit-scrollbar-thumb { background: rgba(77,225,255,0.25); border-radius: 3px; }
 
-.wave-intel {
-  background: rgba(77, 225, 255, 0.06);
-  border: 1px solid rgba(77, 225, 255, 0.2);
-  border-radius: 10px;
-  padding: 14px 16px;
-  margin-bottom: 18px;
-  text-align: left;
-}
-.intel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.intel-act {
-  font-family: var(--font-display);
-  font-size: 11px; letter-spacing: 3px; color: var(--accent); font-weight: 700;
-}
-.intel-diff { font-size: 11px; letter-spacing: 1px; color: var(--gold); opacity: 0.85; }
-.intel-title {
-  font-size: 14px; font-weight: 700; letter-spacing: 1px; margin-bottom: 8px;
-}
-.intel-list { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 14px; }
-.intel-list li {
-  font-size: 12px; opacity: 0.75; padding-left: 10px; position: relative;
-}
-.intel-list li::before {
-  content: ''; position: absolute; left: 0; top: 0.55em;
-  width: 4px; height: 4px; border-radius: 50%; background: var(--accent);
-}
-
 .upg-cat {
   grid-column: 1 / -1;
   font-family: var(--font-display);
