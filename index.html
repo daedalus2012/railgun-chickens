@@ -36,7 +36,10 @@
       <div id="ammo-wrap"></div>
     </div>
 
-    <div id="banner"></div>
+    <div id="banner">
+      <div id="banner-sub" class="banner-sub"></div>
+      <div id="banner-main" class="banner-main"></div>
+    </div>
     <div id="vignette"></div>
     <div id="damage-flash"></div>
   </div>
@@ -53,7 +56,10 @@
         <div class="hint-chip"><kbd>L-CLICK</kbd><span>Fire railgun</span></div>
         <div class="hint-chip"><kbd>R</kbd><span>Reload</span></div>
         <div class="hint-chip"><kbd>ESC</kbd><span>Pause</span></div>
+        <div class="hint-chip"><kbd>F5</kbd><span>Quick save</span></div>
       </div>
+      <p id="save-slot-info" class="save-slot-info hidden"></p>
+      <button id="load-save-btn" class="big-btn hidden">LOAD SAVE</button>
       <button id="continue-btn" class="big-btn hidden">CONTINUE RUN</button>
       <button id="start-btn" class="big-btn">DEPLOY TURRET</button>
     </div>
@@ -73,7 +79,10 @@
       <p class="shop-sub">Review intel, spend credits, and plan your build before the next assault.</p>
       <div id="wave-intel" class="wave-intel"></div>
       <div id="upgrade-grid"></div>
-      <button id="next-wave-btn" class="big-btn">START WAVE <span id="next-wave-num"></span></button>
+      <div class="shop-actions">
+        <button id="shop-save-btn" class="btn-secondary">SAVE GAME</button>
+        <button id="next-wave-btn" class="big-btn">START WAVE <span id="next-wave-num"></span></button>
+      </div>
     </div>
   </div>
 
@@ -90,7 +99,10 @@
         <div class="pause-stat"><span class="label">INTEGRITY</span><span id="pause-health">100%</span></div>
       </div>
       <p class="pause-hint">Click <b>Resume</b>, then click the battlefield to re-engage the turret.</p>
-      <button id="resume-btn" class="big-btn">RESUME</button>
+      <div class="pause-actions">
+        <button id="pause-save-btn" class="btn-secondary">SAVE GAME</button>
+        <button id="resume-btn" class="big-btn">RESUME</button>
+      </div>
     </div>
   </div>
 
@@ -127,6 +139,8 @@
       <button id="vic-restart-btn" class="big-btn">PLAY AGAIN</button>
     </div>
   </div>
+
+  <div id="toast" class="toast hidden"></div>
 
   <script type="module" src="/src/main.js"></script>
 </body>

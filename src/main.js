@@ -4,7 +4,7 @@ import { Turret } from './turret.js';
 import { ChickenManager } from './chickens.js';
 import { Effects } from './effects.js';
 import { GameAudio } from './audio.js';
-import { FINAL_WAVE, saveGame, loadGame, clearSave } from './save.js';
+import { FINAL_WAVE, saveGame, loadGame, clearSave, saveGameManual, loadGameManual, getManualSaveInfo } from './save.js';
 import {
   waveComposition, waveScaling, waveIntel, getAct,
   milestoneBonus, waveClearReward,
@@ -179,6 +179,10 @@ canvas.addEventListener('click', () => {
 document.addEventListener('mouseup', (e) => { if (e.button === 0) mouseDown = false; });
 document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyR' && state.phase === 'playing') startReload();
+  if (e.code === 'F5') {
+    e.preventDefault();
+    if (state.phase === 'playing' || state.phase === 'paused' || state.phase === 'shop') manualSave();
+  }
   if (e.code === 'Escape') {
     if (state.phase === 'playing') pauseGame();
     else if (state.phase === 'paused') resumeFromPause();
@@ -352,6 +356,9 @@ const moneyEl = document.getElementById('money-num');
 const healthBar = document.getElementById('health-bar');
 const ammoWrap = document.getElementById('ammo-wrap');
 const banner = document.getElementById('banner');
+const bannerMain = document.getElementById('banner-main');
+const bannerSub = document.getElementById('banner-sub');
+const toastEl = document.getElementById('toast');
 const damageFlash = document.getElementById('damage-flash');
 
 function updateHUD() {
@@ -377,11 +384,66 @@ function updateAmmoUI() {
 }
 
 let bannerTimer = null;
-function showBanner(text, dur = 1800) {
-  banner.textContent = text;
+function showBanner(main, dur = 1800, sub = '') {
+  bannerMain.textContent = main;
+  if (sub) {
+    bannerSub.textContent = sub;
+    bannerSub.style.display = 'block';
+  } else {
+    bannerSub.textContent = '';
+    bannerSub.style.display = 'none';
+  }
   banner.classList.add('show');
   clearTimeout(bannerTimer);
   bannerTimer = setTimeout(() => banner.classList.remove('show'), dur);
+}
+
+let toastTimer = null;
+function showToast(msg, dur = 2200) {
+  toastEl.textContent = msg;
+  toastEl.classList.remove('hidden');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.add('hidden'), dur);
+}
+
+function formatSaveDate(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    + ' ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+
+function manualSave() {
+  if (state.phase === 'menu' || state.phase === 'gameover' || state.phase === 'victory') return false;
+  const ok = saveGameManual(state, chickens, aimYaw, aimPitch);
+  if (ok) {
+    persistNow();
+    showToast(`SAVED — WAVE ${state.wave} · ${state.score} PTS`);
+    updateMenuSaveButtons();
+    audio.uiClick();
+  } else {
+    showToast('SAVE FAILED');
+  }
+  return ok;
+}
+
+function updateMenuSaveButtons() {
+  const session = loadGame();
+  const manual = getManualSaveInfo();
+  const continueBtn = document.getElementById('continue-btn');
+  const loadBtn = document.getElementById('load-save-btn');
+  const infoEl = document.getElementById('save-slot-info');
+
+  continueBtn.classList.toggle('hidden', !session);
+  loadBtn.classList.toggle('hidden', !manual);
+
+  if (manual) {
+    loadBtn.textContent = `LOAD SAVE — WAVE ${manual.wave}`;
+    infoEl.textContent = `Saved run: Wave ${manual.wave} · ${manual.score} pts · ${formatSaveDate(manual.savedAt)}`;
+    infoEl.classList.remove('hidden');
+  } else {
+    infoEl.classList.add('hidden');
+  }
 }
 
 // ---------------- Game events ----------------
@@ -442,7 +504,7 @@ function startWave(n) {
   document.getElementById('reload-text').classList.remove('show');
   const intel = waveIntel(n);
   const label = n >= FINAL_WAVE ? `FINAL WAVE ${n}` : intel.isBossWave ? `WAVE ${n} — BOSS ASSAULT` : `WAVE ${n}`;
-  showBanner(`${getAct(n).name} · ${label}`);
+  showBanner(label, 1800, getAct(n).name);
   // Don't request lock here — wait for a click on the canvas (avoids instant pause from button click)
   persistNow();
 }
@@ -710,20 +772,33 @@ function restoreGame(data) {
     engageEl.classList.remove('hidden');
   }
   audio.setIntensity(Math.min(1, state.wave / FINAL_WAVE));
+  updateMenuSaveButtons();
 }
 
-// ---------------- Start / continue ----------------
-const savedRun = loadGame();
+// ---------------- Start / continue / load ----------------
+updateMenuSaveButtons();
+
 const continueBtn = document.getElementById('continue-btn');
-if (savedRun) {
-  continueBtn.classList.remove('hidden');
-  continueBtn.addEventListener('click', () => {
-    audio.ensure();
-    audio.startMusic();
-    audio.uiClick();
-    restoreGame(savedRun);
-  });
-}
+continueBtn.addEventListener('click', () => {
+  const data = loadGame();
+  if (!data) return;
+  audio.ensure();
+  audio.startMusic();
+  audio.uiClick();
+  restoreGame(data);
+});
+
+document.getElementById('load-save-btn').addEventListener('click', () => {
+  const data = loadGameManual();
+  if (!data) { updateMenuSaveButtons(); return; }
+  audio.ensure();
+  audio.startMusic();
+  audio.uiClick();
+  restoreGame(data);
+});
+
+document.getElementById('pause-save-btn').addEventListener('click', manualSave);
+document.getElementById('shop-save-btn').addEventListener('click', manualSave);
 
 document.getElementById('start-btn').addEventListener('click', () => {
   audio.ensure();
