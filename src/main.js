@@ -1,10 +1,14 @@
 import * as THREE from 'three';
 import { World, terrainHeight, raycastTerrain } from './world.js';
 import { Turret } from './turret.js';
-import { ChickenManager, waveComposition, waveScaling } from './chickens.js';
+import { ChickenManager } from './chickens.js';
 import { Effects } from './effects.js';
 import { GameAudio } from './audio.js';
 import { FINAL_WAVE, saveGame, loadGame, clearSave } from './save.js';
+import {
+  waveComposition, waveScaling, waveIntel, getAct,
+  milestoneBonus, waveClearReward,
+} from './progression.js';
 
 // ---------------- Renderer / scene ----------------
 const canvas = document.getElementById('game');
@@ -33,16 +37,20 @@ window.addEventListener('resize', () => {
 });
 
 // ---------------- Upgrades ----------------
+// cat: offense | defense | utility — unlock gates force build variety across 20 waves
 const UPGRADES = {
-  damage:    { name: 'DAMAGE',        desc: 'Higher energy output per shot', base: 60,  mult: 1.6, max: 8 },
-  fireRate:  { name: 'FIRE RATE',     desc: 'Faster capacitor cycling between shots', base: 50,  mult: 1.6, max: 8 },
-  reload:    { name: 'RELOAD SPEED',  desc: 'Swap energy cells faster', base: 45,  mult: 1.55, max: 6 },
-  piercing:  { name: 'PIERCING',      desc: 'Beam passes through +1 extra target', base: 90,  mult: 1.9, max: 5 },
-  beamWidth: { name: 'BEAM WIDTH',    desc: 'Wider beam catches more chickens', base: 70,  mult: 1.7, max: 6 },
-  explosion: { name: 'IMPACT BLAST',  desc: 'Shots detonate on impact in a radius', base: 110, mult: 1.8, max: 6 },
-  chain:     { name: 'CHAIN ARC',     desc: 'Kills arc lightning to nearby chickens', base: 100, mult: 1.85, max: 5 },
-  magazine:  { name: 'OVERCHARGE MAG', desc: '+1 energy cell per clip', base: 55,  mult: 1.65, max: 6 },
-  cryo:      { name: 'CRYO BEAM',     desc: 'Shots slow chickens — stacks with hits', base: 80,  mult: 1.7, max: 6 },
+  damage:    { name: 'DAMAGE',         cat: 'offense',  desc: '+32% beam damage per rank', base: 55,  mult: 1.55, max: 10, unlock: 1 },
+  fireRate:  { name: 'FIRE RATE',      cat: 'offense',  desc: 'Faster shots between reloads', base: 48,  mult: 1.52, max: 10, unlock: 1 },
+  reload:    { name: 'RELOAD SPEED',   cat: 'utility',  desc: 'Shorter magazine swap time', base: 42,  mult: 1.5,  max: 8,  unlock: 1 },
+  piercing:  { name: 'PIERCING',       cat: 'offense',  desc: 'Beam pierces +1 target', base: 85,  mult: 1.85, max: 6,  unlock: 2 },
+  beamWidth: { name: 'BEAM WIDTH',     cat: 'offense',  desc: 'Wider beam — easier to hit swarms', base: 65,  mult: 1.65, max: 8,  unlock: 1 },
+  explosion: { name: 'IMPACT BLAST',   cat: 'offense',  desc: 'Shots explode on impact', base: 100, mult: 1.75, max: 7,  unlock: 4 },
+  chain:     { name: 'CHAIN ARC',      cat: 'offense',  desc: 'Kills chain lightning to nearby foes', base: 95,  mult: 1.8,  max: 6,  unlock: 3 },
+  magazine:  { name: 'OVERCHARGE MAG', cat: 'utility',  desc: '+1 round per magazine', base: 52,  mult: 1.6,  max: 7,  unlock: 2 },
+  cryo:      { name: 'CRYO BEAM',      cat: 'utility',  desc: 'Slow chickens on hit — stacks', base: 75,  mult: 1.65, max: 7,  unlock: 6 },
+  fortify:   { name: 'BUNKER PLATING', cat: 'defense',  desc: '−12% breach damage per rank', base: 70,  mult: 1.7,  max: 6,  unlock: 5 },
+  salvage:   { name: 'SALVAGE CREW',   cat: 'utility',  desc: '+10% credits from kills', base: 60,  mult: 1.65, max: 6,  unlock: 7 },
+  nanites:   { name: 'FIELD NANITES',  cat: 'defense',  desc: '+6 base repair between waves', base: 65,  mult: 1.7,  max: 6,  unlock: 8 },
 };
 
 const state = {
@@ -52,7 +60,7 @@ const state = {
   money: 0,
   health: 100,
   maxHealth: 100,
-  levels: { damage: 0, fireRate: 0, reload: 0, piercing: 0, beamWidth: 0, explosion: 0, chain: 0, magazine: 0, cryo: 0 },
+  levels: { damage: 0, fireRate: 0, reload: 0, piercing: 0, beamWidth: 0, explosion: 0, chain: 0, magazine: 0, cryo: 0, fortify: 0, salvage: 0, nanites: 0 },
   // weapon runtime
   ammo: 6,
   magSize: 6,
@@ -79,7 +87,16 @@ const derived = {
   get chainDamage() { return derived.damage * (0.52 + state.levels.chain * 0.06); },
   get slowAmount() { return state.levels.cryo * 0.11; },
   get slowRadius() { return 2 + state.levels.cryo * 0.55; },
+  get breachReduction() { return state.levels.fortify * 0.12; },
+  get creditBonus() { return 1 + state.levels.salvage * 0.1; },
+  get waveRepair() { return 8 + state.levels.nanites * 6; },
 };
+
+function upgradeCost(key) {
+  const u = UPGRADES[key];
+  const waveTax = 1 + state.wave * 0.025;
+  return Math.round(u.base * Math.pow(u.mult, state.levels[key]) * waveTax);
+}
 
 function syncMagSize() {
   state.magSize = derived.magSize;
@@ -87,9 +104,8 @@ function syncMagSize() {
   updateAmmoUI();
 }
 
-function upgradeCost(key) {
-  const u = UPGRADES[key];
-  return Math.round(u.base * Math.pow(u.mult, state.levels[key]));
+function isUpgradeUnlocked(key) {
+  return state.wave >= (UPGRADES[key].unlock || 1);
 }
 
 // ---------------- Input / aiming ----------------
@@ -371,8 +387,9 @@ function showBanner(text, dur = 1800) {
 // ---------------- Game events ----------------
 const game = {
   onKill(c) {
+    const creditMult = (state.waveScale?.creditMult || 1) * derived.creditBonus;
     state.score += c.def.score;
-    state.money += Math.round(c.def.money * (1 + state.wave * 0.03));
+    state.money += Math.round(c.def.money * creditMult);
     if (c.def.boss) { addShake(0.7); audio.explosion(true); }
     else if (c.def.explodes) audio.explosion(false);
     if (Math.random() < 0.3) audio.cluck(1 / c.scale);
@@ -391,7 +408,8 @@ const game = {
     chickens.areaDamage(c.x, c.z, r, c.def.boss ? 120 : 45, game);
   },
   onBreach(c) {
-    state.health -= c.def.dmg;
+    const dmg = Math.max(1, Math.round(c.def.dmg * (1 - derived.breachReduction)));
+    state.health -= dmg;
     addShake(0.5);
     audio.hit(true);
     audio.cluck(1.4);
@@ -422,8 +440,9 @@ function startWave(n) {
   updateHUD();
   updateAmmoUI();
   document.getElementById('reload-text').classList.remove('show');
-  const label = n >= FINAL_WAVE ? `FINAL WAVE ${n}` : (n % 5 === 0 && n >= 5 ? `WAVE ${n} — BOSS` : `WAVE ${n}`);
-  showBanner(label);
+  const intel = waveIntel(n);
+  const label = n >= FINAL_WAVE ? `FINAL WAVE ${n}` : intel.isBossWave ? `WAVE ${n} — BOSS ASSAULT` : `WAVE ${n}`;
+  showBanner(`${getAct(n).name} · ${label}`);
   // Don't request lock here — wait for a click on the canvas (avoids instant pause from button click)
   persistNow();
 }
@@ -453,10 +472,18 @@ const shopEl = document.getElementById('shop');
 const upgradeGrid = document.getElementById('upgrade-grid');
 
 function openShop() {
-  const bonus = 25 + state.wave * 10;
-  state.money += bonus;
-  state.health = Math.min(state.maxHealth, state.health + 12);
+  const reward = waveClearReward(state.wave);
+  state.money += reward.credits;
+  state.health = Math.min(state.maxHealth, state.health + reward.repair + derived.waveRepair);
   updateHUD();
+
+  const milestone = milestoneBonus(state.wave);
+  if (milestone) {
+    state.money += milestone.credits;
+    state.health = Math.min(state.maxHealth, state.health + milestone.repair);
+    updateHUD();
+    setTimeout(() => showBanner(milestone.label, 2200), 1600);
+  }
 
   if (state.wave >= FINAL_WAVE) {
     victory();
@@ -479,37 +506,63 @@ function openShop() {
 
 function renderShop() {
   document.getElementById('shop-money').textContent = state.money;
-  upgradeGrid.innerHTML = '';
-  for (const key of Object.keys(UPGRADES)) {
-    const u = UPGRADES[key];
-    const lvl = state.levels[key];
-    const maxed = lvl >= u.max;
-    const cost = upgradeCost(key);
-    const afford = state.money >= cost;
+  const nextWave = state.wave + 1;
+  const intel = waveIntel(nextWave);
+  const intelEl = document.getElementById('wave-intel');
+  if (intelEl) {
+    intelEl.innerHTML = `
+      <div class="intel-header">
+        <span class="intel-act">${intel.act}</span>
+        <span class="intel-diff">THREAT ${'█'.repeat(intel.difficulty)}${'░'.repeat(5 - intel.difficulty)}</span>
+      </div>
+      <div class="intel-title">INCOMING — WAVE ${nextWave} · ${intel.total} hostiles${intel.isBossWave ? ' · BOSS' : ''}</div>
+      <ul class="intel-list">${intel.threats.map((t) => `<li>${t}</li>`).join('')}</ul>`;
+  }
 
-    const btn = document.createElement('button');
-    btn.className = 'upg' + (maxed ? ' maxed disabled' : afford ? '' : ' disabled');
-    btn.innerHTML = `
-      <div class="upg-name">${u.name}</div>
-      <div class="upg-desc">${u.desc}</div>
-      <div class="upg-row">
-        <span class="upg-cost ${maxed ? 'maxed-label' : ''}">${maxed ? 'MAXED' : '¤ ' + cost}</span>
-        <span class="upg-pips">${Array.from({ length: u.max }, (_, i) =>
-          `<span class="pip ${i < lvl ? 'on' : ''}"></span>`).join('')}</span>
-      </div>`;
-    if (!maxed && afford) {
-      btn.addEventListener('click', () => {
-        state.money -= cost;
-        state.levels[key]++;
-        if (key === 'magazine') syncMagSize();
-        audio.uiClick();
-        updateHUD();
-        renderShop();
-        updateAmmoUI();
-        persistDebounced();
-      });
+  upgradeGrid.innerHTML = '';
+  const cats = { offense: 'OFFENSE', defense: 'DEFENSE', utility: 'UTILITY' };
+  for (const cat of ['offense', 'defense', 'utility']) {
+    const keys = Object.keys(UPGRADES).filter((k) => UPGRADES[k].cat === cat);
+    if (!keys.length) continue;
+    const hdr = document.createElement('div');
+    hdr.className = 'upg-cat';
+    hdr.textContent = cats[cat];
+    upgradeGrid.appendChild(hdr);
+
+    for (const key of keys) {
+      const u = UPGRADES[key];
+      const lvl = state.levels[key] || 0;
+      const maxed = lvl >= u.max;
+      const locked = !isUpgradeUnlocked(key);
+      const cost = upgradeCost(key);
+      const afford = state.money >= cost;
+
+      const btn = document.createElement('button');
+      btn.className = 'upg'
+        + (maxed ? ' maxed disabled' : locked ? ' locked disabled' : afford ? '' : ' disabled');
+      btn.innerHTML = `
+        <div class="upg-name">${u.name}</div>
+        <div class="upg-desc">${u.desc}</div>
+        <div class="upg-row">
+          <span class="upg-cost ${maxed ? 'maxed-label' : ''}">${
+            maxed ? 'MAXED' : locked ? `UNLOCK WAVE ${u.unlock}` : '¤ ' + cost}</span>
+          <span class="upg-pips">${Array.from({ length: u.max }, (_, i) =>
+            `<span class="pip ${i < lvl ? 'on' : ''}"></span>`).join('')}</span>
+        </div>`;
+      if (!maxed && !locked && afford) {
+        btn.addEventListener('click', () => {
+          state.money -= cost;
+          state.levels[key]++;
+          if (key === 'magazine') syncMagSize();
+          audio.uiClick();
+          updateHUD();
+          renderShop();
+          updateAmmoUI();
+          persistDebounced();
+        });
+      }
+      upgradeGrid.appendChild(btn);
     }
-    upgradeGrid.appendChild(btn);
   }
 }
 
@@ -601,7 +654,8 @@ function resetGame() {
   state.money = 0;
   state.health = state.maxHealth;
   state.wave = 0;
-  state.levels = { damage: 0, fireRate: 0, reload: 0, piercing: 0, beamWidth: 0, explosion: 0, chain: 0, magazine: 0, cryo: 0 };
+  state.levels = { damage: 0, fireRate: 0, reload: 0, piercing: 0, beamWidth: 0, explosion: 0, chain: 0, magazine: 0, cryo: 0, fortify: 0, salvage: 0, nanites: 0 };
+  state.maxHealth = 100;
   syncMagSize();
   state.spawnQueue = [];
   state.spawnTimer = 0;
@@ -618,7 +672,8 @@ function restoreGame(data) {
   state.score = data.score;
   state.money = data.money;
   state.health = data.health;
-  state.levels = { ...data.levels };
+  state.maxHealth = data.maxHealth || 100;
+  state.levels = { damage: 0, fireRate: 0, reload: 0, piercing: 0, beamWidth: 0, explosion: 0, chain: 0, magazine: 0, cryo: 0, fortify: 0, salvage: 0, nanites: 0, ...data.levels };
   state.ammo = data.ammo;
   state.cooldown = data.cooldown;
   state.reloading = data.reloading;

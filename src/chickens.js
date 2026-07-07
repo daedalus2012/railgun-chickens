@@ -72,6 +72,8 @@ export const TYPES = {
   fast:      { hp: 18,  speed: 11.5, scale: 0.78, tint: 0xffe38a, score: 15,  money: 14, dmg: 6 },
   tank:      { hp: 130, speed: 4.0,  scale: 1.45, tint: 0x8f9aa8, score: 30,  money: 26, dmg: 16 },
   explosive: { hp: 26,  speed: 7.0,  scale: 1.05, tint: 0xff7a66, score: 20,  money: 20, dmg: 14, explodes: true },
+  armored:   { hp: 95,  speed: 5.2,  scale: 1.2,  tint: 0xc4b8a8, score: 22,  money: 22, dmg: 12, armor: 0.32 },
+  swarm:     { hp: 10,  speed: 14.5, scale: 0.55, tint: 0xfff6b3, score: 6,   money: 5,  dmg: 4 },
   giant:     { hp: 700, speed: 3.2,  scale: 3.2, tint: 0xfff2f2, score: 200, money: 150, dmg: 40, boss: true },
 };
 
@@ -246,7 +248,9 @@ export class ChickenManager {
     if (opts.applySlow && opts.slowAmount > 0) {
       c.slow = Math.min(0.72, Math.max(c.slow || 0, opts.slowAmount));
     }
-    c.hp -= amount;
+    let dmg = amount;
+    if (c.def.armor) dmg *= 1 - c.def.armor;
+    c.hp -= dmg;
     c.flash = 1;
     this._colorDirty = true;
     if (c.hp <= 0) {
@@ -389,33 +393,3 @@ export class ChickenManager {
   get aliveCount() { return this.chickens.length; }
 }
 
-// ---------------- Wave composition ----------------
-export function waveComposition(wave) {
-  const list = [];
-  const push = (type, n) => { for (let i = 0; i < n; i++) list.push(type); };
-  wave = Math.min(wave, 10);
-
-  const base = 6 + Math.floor(wave * 2.2);
-  push('normal', base);
-  if (wave >= 2) push('fast', Math.floor(wave * 1.1));
-  if (wave >= 3) push('tank', Math.floor(wave * 0.6));
-  if (wave >= 4) push('explosive', Math.floor(wave * 0.5));
-  if (wave >= 5 && wave % 5 === 0) push('giant', Math.floor(wave / 5));
-  // rare bonus giant
-  else if (wave >= 8 && Math.random() < 0.12) push('giant', 1);
-
-  // shuffle
-  for (let i = list.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [list[i], list[j]] = [list[j], list[i]];
-  }
-  return list;
-}
-
-export function waveScaling(wave) {
-  return {
-    hp: 1 + (wave - 1) * 0.12,
-    speed: Math.min(1.8, 1 + (wave - 1) * 0.035),
-    interval: Math.max(0.28, 1.1 - wave * 0.06),
-  };
-}

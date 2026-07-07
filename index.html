@@ -15,7 +15,7 @@
   <!-- HUD -->
   <div id="hud" class="hidden">
     <div id="topbar">
-      <div class="stat"><span class="label">WAVE</span><span id="wave-num">1</span><span class="wave-of">/ 10</span></div>
+      <div class="stat"><span class="label">WAVE</span><span id="wave-num">1</span><span class="wave-of">/ 20</span></div>
       <div class="stat"><span class="label">SCORE</span><span id="score-num">0</span></div>
       <div class="stat money"><span class="label">CREDITS</span><span id="money-num">0</span></div>
     </div>
@@ -47,7 +47,7 @@
       <div class="panel-accent"></div>
       <p class="eyebrow">TACTICAL DEFENSE SIM</p>
       <h1>RAIL<span>HILL</span></h1>
-      <p class="subtitle">Chickens are charging down the hill.<br/>Hold the railgun line through <b>10 waves</b>.</p>
+      <p class="subtitle">Chickens are charging down the hill.<br/>Survive <b>20 waves</b> across four acts of escalating chaos.</p>
       <div class="controls-hint">
         <div class="hint-chip"><kbd>MOUSE</kbd><span>Aim turret</span></div>
         <div class="hint-chip"><kbd>L-CLICK</kbd><span>Fire railgun</span></div>
@@ -70,7 +70,8 @@
         </div>
         <div class="shop-money"><span class="label">CREDITS</span><span id="shop-money">0</span></div>
       </div>
-      <p class="shop-sub">Spend credits to upgrade the railgun before the next assault.</p>
+      <p class="shop-sub">Review intel, spend credits, and plan your build before the next assault.</p>
+      <div id="wave-intel" class="wave-intel"></div>
       <div id="upgrade-grid"></div>
       <button id="next-wave-btn" class="big-btn">START WAVE <span id="next-wave-num"></span></button>
     </div>
@@ -122,10 +123,7 @@
       <div class="panel-accent"></div>
       <p class="eyebrow">MISSION COMPLETE</p>
       <h2 class="vic-title">HILL SECURED</h2>
-      <div class="end-stats">
-        <div class="end-stat"><span class="label">WAVES CLEARED</span><b>10</b></div>
-        <div class="end-stat"><span class="label">FINAL SCORE</span><b id="vic-score">0</b></div>
-      </div>
+      <p class="go-stats">All 20 waves cleared — the hill is yours.<br/>Final score <b id="vic-score">0</b></p>
       <button id="vic-restart-btn" class="big-btn">PLAY AGAIN</button>
     </div>
   </div>
