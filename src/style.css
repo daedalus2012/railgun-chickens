@@ -19,11 +19,15 @@ html, body {
   color: #e8f2ff;
   user-select: none;
   -webkit-user-select: none;
+  touch-action: none;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* Cursor: only hide when pointer is actually locked */
-#game { position: fixed; inset: 0; display: block; cursor: crosshair; }
+#game { position: fixed; inset: 0; display: block; cursor: crosshair; touch-action: none; }
 body.pointer-locked #game { cursor: none; }
+body.mobile #game { cursor: default; }
 
 .hidden { display: none !important; }
 
@@ -156,6 +160,7 @@ kbd {
   opacity: 1;
 }
 body:not(.pointer-locked) #crosshair { opacity: 0; }
+body.mobile-playing #crosshair { opacity: 1; }
 .ch-line { position: absolute; background: var(--accent); box-shadow: 0 0 6px var(--accent-dim); }
 .ch-t { top: 0; left: 50%; width: 2px; height: 11px; transform: translateX(-50%); }
 .ch-b { bottom: 0; left: 50%; width: 2px; height: 11px; transform: translateX(-50%); }
@@ -329,6 +334,14 @@ body:not(.pointer-locked) #crosshair { opacity: 0; }
   font-size: 13px; letter-spacing: 0.5px;
 }
 .hint-chip span { opacity: 0.75; }
+.mobile-hint {
+  display: inline-block; min-width: 28px; padding: 3px 8px;
+  font-family: var(--font-display); font-size: 11px; font-weight: 700;
+  letter-spacing: 1px; text-align: center;
+  background: rgba(77, 225, 255, 0.12);
+  border: 1px solid rgba(77, 225, 255, 0.35);
+  border-radius: 4px; color: var(--accent);
+}
 
 #load-save-btn { margin-bottom: 10px; }
 #continue-btn { margin-bottom: 12px; }
@@ -492,4 +505,76 @@ body:not(.pointer-locked) #crosshair { opacity: 0; }
   .menu-panel h1 { font-size: 42px; letter-spacing: 8px; }
   .shop-actions { flex-direction: column; }
   .shop-actions .btn-secondary { width: 100%; }
+  #topbar { gap: 20px; padding: 10px 16px; top: max(12px, env(safe-area-inset-top)); }
+  .stat span:last-child, .stat > span:nth-child(2) { font-size: 22px; }
+  #wave-progress { top: 72px; width: min(240px, 70vw); }
+  #bottombar {
+    bottom: max(120px, calc(110px + env(safe-area-inset-bottom)));
+    padding: 10px 16px 12px;
+  }
+  #health-wrap { width: min(280px, 72vw); }
+  .pause-panel, .end-panel { min-width: 0; width: 92vw; }
+  .pause-stats { grid-template-columns: 1fr 1fr; }
+  .end-stats { flex-direction: column; }
+  .controls-hint { gap: 8px; }
+  .hint-chip { font-size: 12px; padding: 7px 10px; }
+}
+
+/* ---------- Mobile touch controls ---------- */
+#mobile-controls {
+  position: fixed; inset: 0; z-index: 12;
+  pointer-events: none;
+}
+#mobile-aim-zone {
+  position: absolute;
+  top: 0; left: 0;
+  width: 68%; height: 100%;
+  pointer-events: auto;
+  touch-action: none;
+}
+.mobile-btn {
+  position: absolute;
+  pointer-events: auto;
+  touch-action: manipulation;
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #06121a;
+  border: 2px solid rgba(77, 225, 255, 0.55);
+  background: linear-gradient(180deg, rgba(122, 237, 255, 0.95), rgba(47, 196, 232, 0.95));
+  box-shadow: 0 0 24px var(--accent-dim), 0 4px 16px rgba(0,0,0,0.4);
+  border-radius: 50%;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.mobile-btn:active {
+  transform: scale(0.94);
+  filter: brightness(0.95);
+}
+.mobile-fire-btn {
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(22px, env(safe-area-inset-bottom));
+  width: 88px; height: 88px;
+  font-size: 15px;
+  border-radius: 50%;
+}
+.mobile-reload-btn {
+  right: max(22px, env(safe-area-inset-right));
+  bottom: max(122px, calc(112px + env(safe-area-inset-bottom)));
+  width: 52px; height: 52px;
+  font-size: 22px; line-height: 1;
+  color: var(--accent);
+  background: rgba(8, 14, 22, 0.82);
+}
+.mobile-pause-btn {
+  top: max(14px, env(safe-area-inset-top));
+  left: max(14px, env(safe-area-inset-left));
+  width: 44px; height: 44px;
+  font-size: 16px; line-height: 1;
+  color: var(--accent);
+  background: rgba(8, 14, 22, 0.82);
+}
+body.mobile-playing .mobile-fire-btn:active {
+  box-shadow: 0 0 36px rgba(77, 225, 255, 0.7), inset 0 0 20px rgba(255,255,255,0.15);
 }

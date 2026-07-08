@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
   <title>RAILHILL — Chicken Defense</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -51,7 +53,7 @@
       <p class="eyebrow">TACTICAL DEFENSE SIM</p>
       <h1>RAIL<span>HILL</span></h1>
       <p class="subtitle">Chickens are charging down the hill.<br/>Survive <b>20 waves</b> across four acts of escalating chaos.</p>
-      <div class="controls-hint">
+      <div class="controls-hint" id="controls-hint">
         <div class="hint-chip"><kbd>MOUSE</kbd><span>Aim turret</span></div>
         <div class="hint-chip"><kbd>L-CLICK</kbd><span>Fire railgun</span></div>
         <div class="hint-chip"><kbd>R</kbd><span>Reload</span></div>
@@ -97,7 +99,7 @@
         <div class="pause-stat"><span class="label">CREDITS</span><span id="pause-money">0</span></div>
         <div class="pause-stat"><span class="label">INTEGRITY</span><span id="pause-health">100%</span></div>
       </div>
-      <p class="pause-hint">Click <b>Resume</b>, then click the battlefield to re-engage the turret.</p>
+      <p class="pause-hint" id="pause-hint">Click <b>Resume</b>, then click the battlefield to re-engage the turret.</p>
       <div class="pause-actions">
         <button id="pause-save-btn" class="btn-secondary">SAVE GAME</button>
         <button id="resume-btn" class="big-btn">RESUME</button>
@@ -140,6 +142,14 @@
   </div>
 
   <div id="toast" class="toast hidden"></div>
+
+  <!-- Mobile touch controls -->
+  <div id="mobile-controls" class="hidden">
+    <div id="mobile-aim-zone" aria-hidden="true"></div>
+    <button type="button" id="mobile-pause" class="mobile-btn mobile-pause-btn" aria-label="Pause">⏸</button>
+    <button type="button" id="mobile-reload" class="mobile-btn mobile-reload-btn" aria-label="Reload">⟳</button>
+    <button type="button" id="mobile-fire" class="mobile-btn mobile-fire-btn">FIRE</button>
+  </div>
 
   <script type="module" src="/src/main.js"></script>
 </body>

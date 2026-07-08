@@ -9,11 +9,14 @@ import {
   waveComposition, waveScaling, getAct,
   milestoneBonus, waveClearReward,
 } from './progression.js';
+import { isMobileDevice, initMobileControls } from './mobile.js';
 
 // ---------------- Renderer / scene ----------------
 const canvas = document.getElementById('game');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+const isMobile = isMobileDevice();
+if (isMobile) document.body.classList.add('mobile');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.25 : 1.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -119,8 +122,41 @@ const AIM_LIMIT_YAW = 1.15, AIM_MIN_PITCH = -0.3, AIM_MAX_PITCH = 0.55;
 
 const engageEl = document.getElementById('engage');
 const waveProgressFill = document.getElementById('wave-progress-fill');
+const mobileControlsEl = document.getElementById('mobile-controls');
 
-function isLocked() { return document.pointerLockElement === canvas; }
+function isLocked() { return !isMobile && document.pointerLockElement === canvas; }
+
+function combatReady() {
+  return state.phase === 'playing' && (isMobile || isLocked());
+}
+
+function applyAimDelta(dx, dy, sens = 0.0016) {
+  aimYaw -= dx * sens;
+  aimPitch += dy * sens;
+  aimYaw = THREE.MathUtils.clamp(aimYaw, -AIM_LIMIT_YAW, AIM_LIMIT_YAW);
+  aimPitch = THREE.MathUtils.clamp(aimPitch, AIM_MIN_PITCH, AIM_MAX_PITCH);
+}
+
+function updateMobileControls() {
+  if (!isMobile) return;
+  const active = state.phase === 'playing';
+  mobileControlsEl.classList.toggle('hidden', !active);
+  document.body.classList.toggle('mobile-playing', active);
+}
+
+function enterCombatPhase() {
+  if (isMobile) {
+    state.phase = 'playing';
+    resumePending = false;
+    engageEl.classList.add('hidden');
+  } else {
+    state.phase = 'awaiting-lock';
+    resumePending = true;
+    engageEl.classList.remove('hidden');
+  }
+  mouseDown = false;
+  updateMobileControls();
+}
 
 function updatePointerState() {
   document.body.classList.toggle('pointer-locked', isLocked());
@@ -145,6 +181,7 @@ function onLockAcquired() {
 
 function onLockLost() {
   updatePointerState();
+  if (isMobile) return;
   if (pausingLock) return;
   // Ignore unlock caused by the same click that requested lock (Play / Resume buttons)
   if (performance.now() < lockGraceUntil) return;
@@ -158,10 +195,7 @@ function onLockLost() {
 
 document.addEventListener('mousemove', (e) => {
   if (state.phase !== 'playing' || !isLocked()) return;
-  aimYaw -= e.movementX * 0.0016;
-  aimPitch += e.movementY * 0.0016;
-  aimYaw = THREE.MathUtils.clamp(aimYaw, -AIM_LIMIT_YAW, AIM_LIMIT_YAW);
-  aimPitch = THREE.MathUtils.clamp(aimPitch, AIM_MIN_PITCH, AIM_MAX_PITCH);
+  applyAimDelta(e.movementX, e.movementY);
 });
 document.addEventListener('mousedown', (e) => {
   if (e.button !== 0) return;
@@ -169,14 +203,48 @@ document.addEventListener('mousedown', (e) => {
     requestPlayLock();
     return;
   }
-  if (state.phase === 'playing' && isLocked()) mouseDown = true;
+  if (combatReady()) mouseDown = true;
 });
 canvas.addEventListener('click', () => {
   if (state.phase === 'awaiting-lock' && !isLocked()) requestPlayLock();
 });
 document.addEventListener('mouseup', (e) => { if (e.button === 0) mouseDown = false; });
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+if (isMobile) {
+  initMobileControls({
+    aimZone: document.getElementById('mobile-aim-zone'),
+    fireBtn: document.getElementById('mobile-fire'),
+    reloadBtn: document.getElementById('mobile-reload'),
+    pauseBtn: document.getElementById('mobile-pause'),
+    onAimDelta: (dx, dy) => {
+      if (state.phase !== 'playing') return;
+      applyAimDelta(dx, dy, 0.0022);
+    },
+    onFireDown: () => {
+      audio.ensure();
+      if (state.phase === 'playing') mouseDown = true;
+    },
+    onFireUp: () => { mouseDown = false; },
+    onReload: () => {
+      audio.ensure();
+      if (state.phase === 'playing') startReload();
+    },
+    onPause: () => {
+      audio.ensure();
+      if (state.phase === 'playing') pauseGame();
+    },
+  });
+
+  document.getElementById('controls-hint').innerHTML = `
+    <div class="hint-chip"><span class="mobile-hint">DRAG LEFT</span><span>Aim turret</span></div>
+    <div class="hint-chip"><span class="mobile-hint">FIRE BTN</span><span>Hold to shoot</span></div>
+    <div class="hint-chip"><span class="mobile-hint">⟳</span><span>Reload</span></div>
+    <div class="hint-chip"><span class="mobile-hint">⏸</span><span>Pause</span></div>`;
+  document.getElementById('pause-hint').innerHTML = 'Tap <b>Resume</b> to continue the defense.';
+}
 document.addEventListener('keydown', (e) => {
-  if (e.code === 'KeyR' && state.phase === 'playing' && isLocked()) startReload();
+  if (e.code === 'KeyR' && combatReady()) startReload();
   if (e.code === 'F5') {
     e.preventDefault();
     if (state.phase === 'playing' || state.phase === 'awaiting-lock' || state.phase === 'paused' || state.phase === 'shop') manualSave();
@@ -483,7 +551,6 @@ const game = {
 // ---------------- Wave flow ----------------
 function startWave(n) {
   state.wave = n;
-  state.phase = 'awaiting-lock';
   state.waveScale = waveScaling(n);
   state.spawnQueue = waveComposition(n);
   state.spawnInterval = state.waveScale.interval;
@@ -493,9 +560,7 @@ function startWave(n) {
   state.cooldown = 0;
   syncMagSize();
   pausingLock = false;
-  resumePending = true;
-  mouseDown = false;
-  engageEl.classList.remove('hidden');
+  enterCombatPhase();
   audio.setIntensity(Math.min(1, n / FINAL_WAVE));
   audio.waveStart();
   updateHUD();
@@ -504,7 +569,6 @@ function startWave(n) {
   const isBoss = state.spawnQueue.includes('giant');
   const label = n >= FINAL_WAVE ? `FINAL WAVE ${n}` : isBoss ? `WAVE ${n} — BOSS ASSAULT` : `WAVE ${n}`;
   showBanner(label, 1800, getAct(n).name);
-  // Don't request lock here — wait for a click on the canvas (avoids instant pause from button click)
   persistNow();
 }
 
@@ -557,6 +621,7 @@ function openShop() {
   if (isLocked()) document.exitPointerLock();
   state.phase = 'shop';
   updatePointerState();
+  updateMobileControls();
   document.getElementById('shop-wave-cleared').textContent = state.wave;
   document.getElementById('next-wave-num').textContent = state.wave + 1;
   renderShop();
@@ -629,6 +694,7 @@ function pauseGame(fromHidden = false, fromLockLoss = false) {
   if (state.phase !== 'playing' && state.phase !== 'awaiting-lock') return;
   pausingLock = true;
   resumePending = false;
+  mouseDown = false;
   engageEl.classList.add('hidden');
   state.phase = 'paused';
   if (isLocked()) document.exitPointerLock();
@@ -639,6 +705,7 @@ function pauseGame(fromHidden = false, fromLockLoss = false) {
   document.getElementById('pause-title').textContent = fromHidden ? 'PAUSED' : 'PAUSED';
   pauseEl.classList.remove('hidden');
   updatePointerState();
+  updateMobileControls();
   persistNow();
 }
 
@@ -646,11 +713,8 @@ function resumeFromPause() {
   if (state.phase !== 'paused') return;
   pauseEl.classList.add('hidden');
   audio.uiClick();
-  state.phase = 'awaiting-lock';
-  resumePending = true;
-  mouseDown = false;
   pausingLock = false;
-  engageEl.classList.remove('hidden');
+  enterCombatPhase();
 }
 
 document.getElementById('resume-btn').addEventListener('click', resumeFromPause);
@@ -660,9 +724,11 @@ function gameOver() {
   state.phase = 'gameover';
   pausingLock = true;
   resumePending = false;
+  mouseDown = false;
   engageEl.classList.add('hidden');
   if (isLocked()) document.exitPointerLock();
   updatePointerState();
+  updateMobileControls();
   document.getElementById('go-wave').textContent = state.wave;
   document.getElementById('go-score').textContent = state.score;
   document.getElementById('gameover').classList.remove('hidden');
@@ -675,9 +741,11 @@ function victory() {
   state.phase = 'victory';
   pausingLock = true;
   resumePending = false;
+  mouseDown = false;
   engageEl.classList.add('hidden');
   if (isLocked()) document.exitPointerLock();
   updatePointerState();
+  updateMobileControls();
   shopEl.classList.add('hidden');
   document.getElementById('vic-score').textContent = state.score;
   document.getElementById('victory').classList.remove('hidden');
@@ -756,11 +824,18 @@ function restoreGame(data) {
     document.getElementById('pause-money').textContent = state.money;
     document.getElementById('pause-health').textContent = `${Math.round(state.health)}%`;
   } else if (state.phase === 'playing' || state.phase === 'awaiting-lock') {
-    state.phase = 'awaiting-lock';
-    resumePending = true;
+    if (isMobile) {
+      state.phase = 'playing';
+      resumePending = false;
+      engageEl.classList.add('hidden');
+    } else {
+      state.phase = 'awaiting-lock';
+      resumePending = true;
+      engageEl.classList.remove('hidden');
+    }
     mouseDown = false;
-    engageEl.classList.remove('hidden');
   }
+  updateMobileControls();
   audio.setIntensity(Math.min(1, state.wave / FINAL_WAVE));
   updateMenuSaveButtons();
 }
@@ -831,7 +906,7 @@ function tick() {
         document.getElementById('reload-text').classList.remove('show');
       }
     }
-    if (mouseDown && isLocked()) tryFire();
+    if (mouseDown && combatReady()) tryFire();
 
     waveTick(dt);
     chickens.update(dt, game);
